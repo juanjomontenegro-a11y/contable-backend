@@ -3,19 +3,29 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 
 const app = express();
-app.use(express.json());
 
-// 🔧 CORS CONFIGURADO (ESTO ARREGLA TU ERROR)
+// 🔥 1. CORS SIEMPRE PRIMERO
 app.use(cors({
   origin: "https://contable.mexe.com.ar",
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
 
-// 🔧 importante para preflight (OPTIONS)
+// 🔥 2. preflight explícito
 app.options("*", cors());
 
+// 🔥 3. JSON parser después de CORS
+app.use(express.json());
+
 const SECRET = "1234";
+
+// HEALTH CHECK
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    ok: true,
+    message: "Backend funcionando correctamente"
+  });
+});
 
 // LOGIN
 app.post("/login", (req, res) => {
