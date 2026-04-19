@@ -1,50 +1,121 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+const SECRET = process.env.JWT_SECRET || "dev_secret_change";
 
-// 🔥 1. CORS SIEMPRE PRIMERO
 app.use(cors({
   origin: "https://contable.mexe.com.ar",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
 
-// 🔥 2. preflight explícito
 app.options("*", cors());
-
-// 🔥 3. JSON parser después de CORS
 app.use(express.json());
 
-const SECRET = "1234";
+/* =========================
+   🧠 MOCK DB (REEMPLAZABLE)
+========================= */
 
-// HEALTH CHECK
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    ok: true,
-    message: "Backend funcionando correctamente"
-  });
-});
+const users = [
+  {
+    id: "1",
+    email: "admin@montenegro.com",
+    password: "1234",
+    empresaId: "emp1",
+    rol: "admin"
+  }
+];
 
-// LOGIN
-app.post("/login", (req, res) => {
-  const { email } = req.body;
+const empresas = [
+  {
+    id: "emp1",
+    nombre: "Montenegro Consultores",
+    cuit: "30-99999999-9"
+  }
+];
 
-  const token = jwt.sign({ email }, SECRET);
-
-  res.json({ token });
-});
-
-// DASHBOARD
-app.get("/dashboard/:id", (req, res) => {
-  res.json({
+const contabilidad = {
+  emp1: {
     iva: 150000,
     iibb: 60000,
     sueldos: 220000,
     resultado: 400000
+  }
+};
+
+/* =========================
+   🔐 AUTH
+========================= */
+
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+
+  const user = users.find(
+    u => u.email === email && u.password === password
+  );
+
+  if (!user) {
+    return res.status(401).json({ error: "Credenciales inválidas" });
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      empresaId: user.empresaId,
+      rol: user.rol
+    },
+    SECRET,
+    { expiresIn: "8h" }
+  );
+
+  res.json({ token });
+});
+
+/* =========================
+   🧠 MIDDLEWARE AUTH
+========================= */
+
+function auth(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) return res.status(401).json({ error: "No token" });
+
+  try {
+    req.user = jwt.verify(token, SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Token inválido" });
+  }
+}
+
+/* =========================
+   📊 DASHBOARD MULTIEMPRESA
+========================= */
+
+app.get("/dashboard", auth, (req, res) => {
+  const empresaId = req.user.empresaId;
+
+  const data = contabilidad[empresaId];
+
+  res.json({
+    empresa: empresas.find(e => e.id === empresaId),
+    datos: data
   });
 });
 
-// SERVER
-app.listen(3000, () => console.log("Server running"));
+/* =========================
+   🧪 HEALTH
+========================= */
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
+
+/* ========================= */
+
+app.listen(PORT, () => {
+  console.log("Server running on", PORT);
+});
